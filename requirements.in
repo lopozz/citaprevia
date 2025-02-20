@@ -1,0 +1,4 @@
+undetected_chromedriver==3.5.5
+selenium==4.29.0
+fake-useragent
+ruff

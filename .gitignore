@@ -1,5 +1,6 @@
 citaprevia/
-.nie
+__pycache__/
+.venv
 .vscode
 ~/
 check_proxies.py
