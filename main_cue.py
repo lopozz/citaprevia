@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import time
 import logging
 import datetime
 
@@ -66,7 +67,7 @@ MAX = 4
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
-    filename="citaprevia.log",
+    filename="./citaprevia.log",
     filemode="a",
 )
 
@@ -134,7 +135,6 @@ def main(headless=True):
         # element = wait.until(EC.element_to_be_clickable((By.ID, "btnAceptar")))
         # driver.execute_script("arguments[0].scrollIntoView(true);", element)
         random_delay(MIN, MAX)
-
         logger.info("CUE procedure in progress...")
 
         # Select comisaria
@@ -218,22 +218,25 @@ def main(headless=True):
             with open("page_source_success.html", "w", encoding="utf-8") as f:
                 f.write(driver.page_source)
 
-            update_json_with_current_time("citaprevia/data.json")
+            update_json_with_current_time(
+                "./citaprevia/data.json"
+            )
             logger.info("A cita was found!")
         else:
             current_day = datetime.datetime.today().strftime("%A")
             logger.info(
-                f"No citas on {current_day} at {datetime.datetime.now().hour}:{datetime.datetime.now().minute}"
+                f"No citas on {current_day} at {datetime.datetime.now().hour}:{datetime.datetime.now().minute.zfill(2)}"
             )
 
         random_delay(MIN, MAX)
 
     except Exception as e:
+        current_day = datetime.datetime.today().strftime("%A")
         logger.error(f"Script failed: {str(e)}")
         send_discord_message(
             WEBHOOK_URL,
-            f"Script failed on {current_day} at {datetime.datetime.now().hour}:{datetime.datetime.now().minute}: {str(e)}",
-            logger
+            f"Script failed on {current_day} at {datetime.datetime.now().hour}:{datetime.datetime.now().minute.zfill(2)}: {str(e)}",
+            logger,
         )
 
     finally:
@@ -242,4 +245,7 @@ def main(headless=True):
 
 
 if __name__ == "__main__":
-    main()
+    while True:
+        main()
+        logger.info("Sleeping for 20 minutes before the next execution.")
+        time.sleep(1200)

@@ -6,33 +6,19 @@ import datetime
 
 
 def update_json_with_current_time(json_file):
-    # Get the current day and time
-    current_day = datetime.datetime.today().strftime(
-        "%A"
-    )  # Get full day name (e.g., "Monday")
-    current_time = (
-        datetime.datetime.now().hour + datetime.datetime.now().minute / 60.0
-    )  # Convert time to float
+    current_day = datetime.datetime.today().strftime("%A")
+    current_time = datetime.datetime.now()
 
-    try:
-        # Load the JSON file
-        with open(json_file, "r") as file:
-            data = json.load(file)
+    with open(json_file, "r") as file:
+        data = json.load(file)
 
-        # Append the current time to the corresponding day
-        if current_day in data:
-            data[current_day].append(
-                round(current_time, 2)
-            )  # Round to 2 decimal places
+    current_time_float = float(
+        f"{current_time.hour}.{str(current_time.minute).zfill(2)}"
+    )
+    data[current_day].append(float(current_time_float))
 
-        # Save the updated JSON file
-        with open(json_file, "w") as file:
-            json.dump(data, file, indent=4)
-
-        print(f"Updated {current_day} with time: {round(current_time, 2)}")
-
-    except Exception as e:
-        print(f"Error updating JSON: {e}")
+    with open(json_file, "w") as file:
+        json.dump(data, file)
 
 
 def random_delay(min, max):
