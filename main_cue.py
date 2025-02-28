@@ -204,11 +204,11 @@ def check_cue(headless=False):
 def main(headless=False):
     while True:
         if is_within_time_ranges(TARGET_TIMES):
-            logger.info("Running in targeted mode...")
+            logger.info("Running in targeted mode!")
             check_cue(headless)
             next_interval = TARGETED_INTERVAL
         else:
-            logger.info("Running in default mode!")
+            logger.info("Running in default mode...")
             check_cue(headless)
             next_interval = DEFAULT_INTERVAL
 
