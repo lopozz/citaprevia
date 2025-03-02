@@ -1,0 +1,13 @@
+services:
+  chrome-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: undetected-chrome-app:latest
+    container_name: undetected-chrome-app
+    env_file:
+      - .env
+    environment:
+      - TZ=Europe/Madrid
+    volumes:
+      - ./output:/app/output

@@ -9,6 +9,7 @@ import pandas as pd
 import undetected_chromedriver as uc
 
 from fake_useragent import UserAgent
+from selenium.webdriver.support.ui import WebDriverWait
 
 
 def update_json_with_current_time(json_file):
@@ -63,7 +64,7 @@ def send_discord_message(webhook_url, message, logger):
         logger.error(f"Failed to send message to Discord: {response.text}")
 
 
-def create_driver(headless=True):
+def chrome_options(headless=True):
     options = uc.ChromeOptions()
 
     if headless:
@@ -99,13 +100,7 @@ def create_driver(headless=True):
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
 
-    return uc.Chrome(
-        headless=headless,
-        options=options,
-        driver_executable_path="/opt/chromedriver-linux64/chromedriver",
-        browser_executable_path="/usr/bin/google-chrome",
-        version_main=131,
-    )
+    return options
 
 
 def is_within_time_ranges(time_ranges):
@@ -130,3 +125,8 @@ def is_within_time_ranges(time_ranges):
             return True
 
     return False
+
+def wait_page_loaded(driver, t=20):
+    WebDriverWait(driver, t).until(
+        lambda d: d.execute_script("return document.readyState") == "complete"
+    )

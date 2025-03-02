@@ -4,6 +4,10 @@ import os
 import time
 import logging
 import datetime
+from selenium import webdriver
+
+
+import undetected_chromedriver as uc
 
 from fake_useragent import UserAgent
 from selenium.webdriver.common.by import By
@@ -14,8 +18,9 @@ from src.utils import (
     random_delay,
     send_discord_message,
     update_df_with_appointment,
-    create_driver,
+    chrome_options,
     is_within_time_ranges,
+    wait_page_loaded
 )
 
 
@@ -28,11 +33,12 @@ URL = "https://sede.administracionespublicas.gob.es/pagina/index/directorio/icpp
 DEFAULT_INTERVAL = 20
 TARGETED_INTERVAL = 5
 TARGET_TIMES = [("9:20", "9:40")]
+OUTPUT_DIR = 'output'
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
-    filename="./citaprevia.log",
+    filename=os.path.join(OUTPUT_DIR, 'citaprevia.log'),
     filemode="a",
 )
 
@@ -40,7 +46,16 @@ logger = logging.getLogger(__name__)
 
 
 def check_cue(headless=False):
-    driver = create_driver(headless)
+    options = chrome_options(headless)
+
+    driver = uc.Chrome(
+        headless=headless,
+        options=options,
+        # driver_executable_path="/opt/chromedriver-linux64/chromedriver",
+        # browser_executable_path="/usr/bin/google-chrome",
+        # version_main=131,
+    )
+
     wait = WebDriverWait(driver, 10)
 
     # changing the property of the navigator value for webdriver to undefined
@@ -76,15 +91,17 @@ def check_cue(headless=False):
     driver.delete_all_cookies()
 
     try:
-        logger.info("Initializing Chrome driver...")
 
         driver.get(URL)
         random_delay(MIN, MAX)
 
+        logger.info("CUE procedure in progress...")
         element = wait.until(EC.element_to_be_clickable((By.ID, "submit")))
         element.click()
 
-        random_delay(MIN, MAX)
+        # wait_page_loaded(driver, 20)
+
+        random_delay(4, 7)
 
         # Select province
         element = wait.until(EC.presence_of_element_located((By.ID, "form")))
@@ -94,9 +111,11 @@ def check_cue(headless=False):
         element = wait.until(EC.element_to_be_clickable((By.ID, "btnAceptar")))
         element.click()
 
-        # Select oficina
         random_delay(MIN, MAX)
-        logger.info("CUE procedure in progress...")
+        # wait_page_loaded(driver, 20)
+
+        # Select oficina
+        
 
         if OFICINA:
             element = wait.until(EC.presence_of_element_located((By.ID, "sede")))
@@ -123,11 +142,17 @@ def check_cue(headless=False):
         element.click()
 
         random_delay(MIN, MAX)
+        # wait_page_loaded(driver, 20)
+
+        
         element = wait.until(EC.element_to_be_clickable((By.ID, "btnEntrar")))
         element.click()
 
-        # Insert personal data
         random_delay(MIN, MAX)
+        # wait_page_loaded(driver, 20)
+
+        # Insert personal data
+        
         element = wait.until(
             EC.element_to_be_clickable(
                 (By.XPATH, "//input[@id='rdbTipoDocPas' and @value='PASAPORTE']")
@@ -147,45 +172,55 @@ def check_cue(headless=False):
         element.click()
 
         random_delay(MIN, MAX)
+        # wait_page_loaded(driver, 20)
+
+        
         element = wait.until(EC.element_to_be_clickable((By.ID, "btnEnviar")))
         element.click()
 
-        WebDriverWait(driver, 20).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
+        wait_page_loaded(driver, 20)
 
         if "En este momento no hay citas disponibles" in driver.page_source:
-            current_day = datetime.datetime.today().strftime("%A")
-            logger.info("❌ No citas...")
+            logger.info("No citas...")
         elif (
             "Su sesión ha caducado por permanecer demasiado tiempo inactiva"
             in driver.page_source
         ):
-            current_day = datetime.datetime.today().strftime("%A")
-            logger.error("⚠️ Error inactive session...")
+            logger.error("🚨 Error inactive session...")
+        elif "requested URL was rejected" in driver.page_source:
+            logger.error("🚨 Bot was detected...")
         else:
-            logger.info("✅ A cita was found!")
-            with open(
-                f"page_source_success_{str(datetime.datetime.now()).replace(' ', '_')}.html",
-                "w",
-                encoding="utf-8",
-            ) as f:
-                f.write(driver.page_source)
+            current_day = datetime.datetime.today().strftime("%A")            
+            select_element = driver.find_element(By.ID, "idSede")
+            options = select_element.find_elements(By.TAG_NAME, "option")
 
-            update_df_with_appointment(
-                "appointments.csv",
-                CITY,
-                OFICINA,
-                "CUE",
-            )
+            for option in options:
+                logger.info(f"A cita was found on {current_day} in {option.text}!")
 
-            send_discord_message(WEBHOOK_URL, URL, logger)
+                update_df_with_appointment(
+                    os.path.join(OUTPUT_DIR, "appointments.csv"),
+                    CITY,
+                    option.text,
+                    "CUE",
+                )
+                if option.text=="CNP-COMISARIA DE BAILEN, Bailen, 9, VALENCIA":
+                    logger.info(f"✅ A cita was found on {current_day} in {option.text}!")
+                    send_discord_message(WEBHOOK_URL, f"Cita found in {option.text}: {URL}", logger)
+
+                    success_page_dir = os.path.join(OUTPUT_DIR, f"success_page_{str(datetime.datetime.now()).replace(' ', '_')}.html")
+                    with open(
+                        success_page_dir,
+                        "w",
+                        encoding="utf-8",
+                    ) as f:
+                        f.write(driver.page_source)
 
     except Exception as e:
-        logger.error(f"Script failed: {str(e)}")
+        logger.error(f"⚠️Script failed: {str(e)}")
         current_day = datetime.datetime.today().strftime("%A")
+        error_page_dir = os.path.join(OUTPUT_DIR, f"error_page_{current_day}-{datetime.datetime.now().hour}-{str(datetime.datetime.now().minute).zfill(2)}.html")
         with open(
-            f"error_page_{current_day}-{datetime.datetime.now().hour}-{str(datetime.datetime.now().minute).zfill(2)}.html",
+            error_page_dir,
             "w",
             encoding="utf-8",
         ) as f:
@@ -201,14 +236,14 @@ def check_cue(headless=False):
         driver.quit()
 
 
-def main(headless=False):
+def main(headless=True):
     while True:
         if is_within_time_ranges(TARGET_TIMES):
-            logger.info("Running in targeted mode!")
+            logger.info("Initializing procedure in targeted mode!")
             check_cue(headless)
             next_interval = TARGETED_INTERVAL
         else:
-            logger.info("Running in default mode...")
+            logger.info("Initializing procedure in default mode...")
             check_cue(headless)
             next_interval = DEFAULT_INTERVAL
 
