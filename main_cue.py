@@ -1,11 +1,7 @@
-#!/usr/bin/env python3
-
 import os
 import time
 import logging
 import datetime
-from selenium import webdriver
-
 
 import undetected_chromedriver as uc
 
@@ -19,8 +15,8 @@ from src.utils import (
     send_discord_message,
     update_df_with_appointment,
     chrome_options,
-    is_within_time_ranges,
-    wait_page_loaded
+    wait_page_loaded,
+    generate_schedule,
 )
 
 
@@ -33,12 +29,12 @@ URL = "https://sede.administracionespublicas.gob.es/pagina/index/directorio/icpp
 DEFAULT_INTERVAL = 20
 TARGETED_INTERVAL = 5
 TARGET_TIMES = [("9:20", "9:40")]
-OUTPUT_DIR = 'output'
+OUTPUT_DIR = "output"
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
-    filename=os.path.join(OUTPUT_DIR, 'citaprevia.log'),
+    filename=os.path.join(OUTPUT_DIR, "citaprevia.log"),
     filemode="a",
 )
 
@@ -91,7 +87,6 @@ def check_cue(headless=False):
     driver.delete_all_cookies()
 
     try:
-
         driver.get(URL)
         random_delay(MIN, MAX)
 
@@ -115,7 +110,6 @@ def check_cue(headless=False):
         # wait_page_loaded(driver, 20)
 
         # Select oficina
-        
 
         if OFICINA:
             element = wait.until(EC.presence_of_element_located((By.ID, "sede")))
@@ -144,7 +138,6 @@ def check_cue(headless=False):
         random_delay(MIN, MAX)
         # wait_page_loaded(driver, 20)
 
-        
         element = wait.until(EC.element_to_be_clickable((By.ID, "btnEntrar")))
         element.click()
 
@@ -152,7 +145,7 @@ def check_cue(headless=False):
         # wait_page_loaded(driver, 20)
 
         # Insert personal data
-        
+
         element = wait.until(
             EC.element_to_be_clickable(
                 (By.XPATH, "//input[@id='rdbTipoDocPas' and @value='PASAPORTE']")
@@ -174,7 +167,6 @@ def check_cue(headless=False):
         random_delay(MIN, MAX)
         # wait_page_loaded(driver, 20)
 
-        
         element = wait.until(EC.element_to_be_clickable((By.ID, "btnEnviar")))
         element.click()
 
@@ -190,7 +182,7 @@ def check_cue(headless=False):
         elif "requested URL was rejected" in driver.page_source:
             logger.error("🚨 Bot was detected...")
         else:
-            current_day = datetime.datetime.today().strftime("%A")            
+            current_day = datetime.datetime.today().strftime("%A")
             select_element = driver.find_element(By.ID, "idSede")
             options = select_element.find_elements(By.TAG_NAME, "option")
 
@@ -203,11 +195,18 @@ def check_cue(headless=False):
                     option.text,
                     "CUE",
                 )
-                if option.text=="CNP-COMISARIA DE BAILEN, Bailen, 9, VALENCIA":
-                    logger.info(f"✅ A cita was found on {current_day} in {option.text}!")
-                    send_discord_message(WEBHOOK_URL, f"Cita found in {option.text}: {URL}", logger)
+                if option.text == "CNP-COMISARIA DE BAILEN, Bailen, 9, VALENCIA":
+                    logger.info(
+                        f"✅ A cita was found on {current_day} in {option.text}!"
+                    )
+                    send_discord_message(
+                        WEBHOOK_URL, f"Cita found in {option.text}: {URL}", logger
+                    )
 
-                    success_page_dir = os.path.join(OUTPUT_DIR, f"success_page_{str(datetime.datetime.now()).replace(' ', '_')}.html")
+                    success_page_dir = os.path.join(
+                        OUTPUT_DIR,
+                        f"success_page_{str(datetime.datetime.now()).replace(' ', '_')}.html",
+                    )
                     with open(
                         success_page_dir,
                         "w",
@@ -216,9 +215,12 @@ def check_cue(headless=False):
                         f.write(driver.page_source)
 
     except Exception as e:
-        logger.error(f"⚠️Script failed: {str(e)}")
+        logger.error(f"❌ Script failed: {str(e)}")
         current_day = datetime.datetime.today().strftime("%A")
-        error_page_dir = os.path.join(OUTPUT_DIR, f"error_page_{current_day}-{datetime.datetime.now().hour}-{str(datetime.datetime.now().minute).zfill(2)}.html")
+        error_page_dir = os.path.join(
+            OUTPUT_DIR,
+            f"error_page_{current_day}-{datetime.datetime.now().hour}-{str(datetime.datetime.now().minute).zfill(2)}.html",
+        )
         with open(
             error_page_dir,
             "w",
@@ -238,17 +240,45 @@ def check_cue(headless=False):
 
 def main(headless=True):
     while True:
-        if is_within_time_ranges(TARGET_TIMES):
-            logger.info("Initializing procedure in targeted mode!")
-            check_cue(headless)
-            next_interval = TARGETED_INTERVAL
-        else:
-            logger.info("Initializing procedure in default mode...")
-            check_cue(headless)
-            next_interval = DEFAULT_INTERVAL
+        job_times = generate_schedule()
 
-        logger.info(f"Sleeping for {next_interval} minutes before the next execution.")
-        time.sleep(next_interval * 60)
+        for run_time in job_times:
+            now = datetime.now()
+            run_time = now.replace(
+                hour=run_time.hour,
+                minute=run_time.minute,
+                second=run_time.second,
+                microsecond=0,
+            )
+
+            # If run_time is in the past, skip to the next one
+            if run_time < now:
+                continue
+
+            # Wait until the scheduled time
+            wait_time = (run_time - datetime.now()).total_seconds()
+            if wait_time > 0:
+                time.sleep(wait_time)
+
+            # Execute the function
+            check_cue(headless)
+
+        time.sleep(5)
+
+
+# def main(headless=True):
+#     while True:
+#         if is_within_time_ranges(TARGET_TIMES):
+#             logger.info("Initializing procedure in targeted mode!")
+#             check_cue(headless)
+#             next_interval = TARGETED_INTERVAL
+#         else:
+#             logger.info("Initializing procedure in default mode...")
+#             check_cue(headless)
+#             next_interval = DEFAULT_INTERVAL
+
+#         logger.info(f"Sleeping for {next_interval} minutes before the next execution.")
+#         time.sleep(next_interval * 60)
 
 
 if __name__ == "__main__":

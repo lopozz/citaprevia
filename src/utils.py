@@ -9,12 +9,13 @@ import pandas as pd
 import undetected_chromedriver as uc
 
 from fake_useragent import UserAgent
+from datetime import datetime, timedelta  # noqa
 from selenium.webdriver.support.ui import WebDriverWait
 
 
 def update_json_with_current_time(json_file):
-    current_day = datetime.datetime.today().strftime("%A")
-    current_time = datetime.datetime.now()
+    current_day = datetime.today().strftime("%A")
+    current_time = datetime.now()
 
     with open(json_file, "r") as file:
         data = json.load(file)
@@ -29,7 +30,7 @@ def update_json_with_current_time(json_file):
 
 
 def update_df_with_appointment(df_file, city, address, document):
-    now = datetime.datetime.now()
+    now = datetime.now()
     current_day = now.strftime("%A")  # Example: 'Monday'
     current_date = now.strftime("%Y-%m-%d")  # Example: '2024-02-26'
     current_time = now.strftime("%H:%M")
@@ -85,11 +86,11 @@ def chrome_options(headless=True):
     # options.add_experimental_option("useAutomatadd_experimental_optionionExtension", False)
 
     # Use history data
-    home_directory = os.path.expanduser(
-        "~"
-    )  # Expands '~' to the full home directory path
-    user_data_dir = f"{home_directory}/.config/google-chrome/Default"
-    options.add_argument(f"--user-data-dir={user_data_dir}")
+    # home_directory = os.path.expanduser(
+    #     "~"
+    # )
+    # user_data_dir = f"{home_directory}/.config/google-chrome/Default"
+    # options.add_argument(f"--user-data-dir={user_data_dir}")
     # options.add_argument("--user-data-dir=/tmp/selenium-profile")
     # options.add_argument("--user-data-dir=~/.config/google-chrome/Default")
 
@@ -103,30 +104,38 @@ def chrome_options(headless=True):
     return options
 
 
-def is_within_time_ranges(time_ranges):
-    """
-    Check if current time is within any of the specified time ranges
-
-    Args:
-        time_ranges: List of tuples with (start_time, end_time) in format "HH:MM"
-
-    Returns:
-        bool: True if current time is within any of the ranges
-    """
-    current_time = datetime.datetime.now().time()
-
-    for start_time, end_time in time_ranges:
-        start = datetime.time(
-            int(start_time.split(":")[0]), int(start_time.split(":")[1])
-        )
-        end = datetime.time(int(end_time.split(":")[0]), int(end_time.split(":")[1]))
-
-        if start <= current_time <= end:
-            return True
-
-    return False
-
 def wait_page_loaded(driver, t=20):
     WebDriverWait(driver, t).until(
         lambda d: d.execute_script("return document.readyState") == "complete"
     )
+
+
+def generate_schedule():
+    """Generates the list of scheduled times"""
+    job_times = set()
+
+    # Define start and end times for 20-minute interval jobs
+    start_time = datetime.strptime("00:00", "%H:%M")
+    end_time = datetime.strptime("23:55", "%H:%M")
+    interval = timedelta(minutes=20)
+
+    current_time = start_time
+    while current_time <= end_time:
+        job_times.add(current_time)
+        current_time += interval
+
+    # Define start and end times for 5-minute interval jobs
+    start_time = datetime.strptime("09:20", "%H:%M")
+    end_time = datetime.strptime("09:39", "%H:%M")
+    interval = timedelta(minutes=5)
+
+    current_time = start_time
+    while current_time <= end_time:
+        job_times.add(current_time)
+        current_time += interval
+
+    # Convert set to sorted list and apply random offsets
+    job_times = sorted(job_times)
+    job_times = [jt + timedelta(seconds=random.uniform(0, 10)) for jt in job_times]
+
+    return job_times
